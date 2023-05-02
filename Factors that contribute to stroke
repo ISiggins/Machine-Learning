@@ -1,0 +1,106 @@
+#Importing the libraries
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from keras.models import Sequential
+from keras.layers import Dense
+import tensorflow as tf
+
+# importing the data set
+df = pd.read_csv('dataset-stroke.csv')
+
+# shows a bar graph comparing those who were diagonsed with a stroke and those who were not
+plt.figure()
+df.stroke.value_counts().plot(kind = 'bar')
+# as we can see there is a huge imbalance between those who have not had a stroke
+# compared to those who have had one.
+
+
+# processing the data,  change the categorial variables to a numerical one
+
+df.replace(to_replace=('Male','Female'),
+             value=['0','1'], inplace=True)
+
+df.replace(to_replace=('No','Yes'),
+             value=['0','1'], inplace=True)
+
+df.replace(to_replace=('Private','Self-employed','Govt_job','children','Never_worked'),
+             value=['0','1','2','3','4'], inplace=True)
+
+df.replace(to_replace=('Urban','Rural'),
+             value=['0','1'], inplace=True)
+
+df.replace(to_replace=('smokes','formerly smoked','never smoked','Unknown'),
+           value= ['0','1','2','3'], inplace= True)
+
+
+# Remove any nan and replace them with the average
+from sklearn.impute import SimpleImputer
+imputer = SimpleImputer(missing_values= np.nan, strategy='mean')
+imputer.fit(X[:, 1:])
+X[:, 1:] = imputer.transform(X[:, 1:])
+
+# Drop row with missing value
+df = df.dropna(axis=0)
+# drop ID
+df = df.drop(['id'],axis = 1)
+
+#encoding
+from sklearn.preprocessing import LabelEncoder
+
+# Label Encoding
+encoder = LabelEncoder() # method initialization
+
+# Looping for columns
+for i in df.columns:  
+    if(df[i].dtype=='object'): # if column type = object
+        df[i] = encoder.fit_transform(df[i])
+    else: # else get the self column value without encode
+        df[i] = df[i]        
+        
+#set the feature and target
+X = df.iloc[:,1:].values
+y = df.iloc[:,-1].values
+
+# we need to make the target more balance so we are able to capture the minority group for a more accurate model
+# we can use the resampling techinque to remove the samples 
+#from the majority class or by adding more copies to the minority class
+
+from collections import Counter
+from imblearn.under_sampling import RandomUnderSampler
+#transform the dataset
+
+undersampling = RandomUnderSampler(random_state= 42)
+X,y = undersampling.fit_resample(X, y)
+
+#summerise the new class distribution
+counter = Counter(y)
+print(counter)
+
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+
+# Data normalization using scaling
+from sklearn.preprocessing import StandardScaler
+
+sc = StandardScaler()
+X_train = sc.fit_transform(X_train)
+X_test = sc.transform(X_test)
+
+
+# define the keras model
+model = Sequential()
+model.add(Dense(10, input_dim=10, activation='relu'))
+model.add(Dense(8, activation='relu'))
+model.add(Dense(1, activation='sigmoid'))
+
+# compile the keras model
+model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+# evaluate the keras model
+_, accuracy = model.evaluate(X_test, y_test)
+print('Accuracy: %.2f' % (accuracy*100))
+
+
+
