@@ -1,0 +1,293 @@
+#Importing the libraries
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from sklearn.metrics import classification_report
+import seaborn as sns
+
+
+
+# importing the data set
+
+dataset = pd.read_csv('HepatitisCdata.csv')
+
+# processing the data
+dataset.drop('Unnamed: 0', axis=1, inplace=True)
+
+dataset.replace(to_replace=('m','f'),
+             value=['0','1'], inplace=True)
+
+
+dataset.replace(to_replace=['0 = Blood Donor','0s = suspect Blood Donor',
+                         '1 = Hepatitis', '2 = Fibrosis',
+                         '3 = Cirrhosis'],
+             value=['0','1','2','3','4'], inplace= True)
+
+X = dataset.iloc[:,1:].values
+y = dataset.iloc[:,0].values
+
+# pie chart of the various potential outputs
+plt.figure()
+dataset.Category.value_counts().plot(kind ='pie')
+
+# Heatmap
+dataset.corr()
+corr_matrix = dataset.corr()
+corr_matrix.style.background_gradient(cmap='coolwarm')
+
+# Seaborn pairplot compare pairplot and heatmap postive and negative correlations
+hepC_pairplot = dataset.dropna()
+sns.pairplot(hepC_pairplot, height = 1.20)
+
+
+# Remove any nan and replace them with the average
+from sklearn.impute import SimpleImputer
+imputer = SimpleImputer(missing_values= np.nan, strategy='mean')
+imputer.fit(X[:, 1:])
+X[:, 1:] = imputer.transform(X[:, 1:])
+
+
+# Splitting the dataset into training and testing
+from sklearn.model_selection import train_test_split
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+print(X_train)
+
+
+#Feature Scaling- to avoid information leakage from the test set
+from sklearn.preprocessing import StandardScaler
+
+sc = StandardScaler()
+X_train = sc.fit_transform(X_train)
+X_test = sc.transform(X_test)
+
+#Import Random Forest Model
+from sklearn.ensemble import RandomForestClassifier
+clf_rfc=RandomForestClassifier(n_estimators=100, criterion= 'entropy', random_state=42)# this is where we can tune
+clf_rfc.fit(X_train,y_train)
+y_pred=clf_rfc.predict(X_test)
+
+from sklearn import metrics
+print("Accuracy :",metrics.accuracy_score(y_test, y_pred))
+
+# predicting the test set results
+y_pred_rfc = clf_rfc.predict(X_test)
+print(np.concatenate((y_pred_rfc.reshape(len(y_pred_rfc),1), y_test.reshape(len(y_test),1)),1))
+
+
+# making a confusion matrix
+from sklearn.metrics import confusion_matrix, accuracy_score
+cm = confusion_matrix(y_test, y_pred_rfc)
+print(cm)
+accuracy_score(y_test, y_pred_rfc)
+print(classification_report(y_test, y_pred_rfc))
+
+from sklearn.model_selection import cross_val_score
+accuracies = cross_val_score(estimator = clf_rfc, X= X_train, y= y_train, cv = 10)
+print("Accuracy: {:.2f} %".format(accuracies.mean()*100)) # prints the accuracy 93.10%
+print("Standard Deviation: {:.2f} %".format(accuracies.std()*100))# 2.04%
+
+
+# improving random forest with grid search
+from sklearn.model_selection import GridSearchCV
+
+parameters_rfc = [{'n_estimators': [1,5,10,25,50,75,100], 'criterion': ['gini','entropy'],
+                   'min_samples_split':[2,3,4,5],
+                   'min_samples_leaf': [1,2,3,4,5]},]
+grid_search = GridSearchCV(estimator = clf_rfc,
+                           param_grid= parameters_rfc,
+                           scoring = 'accuracy',
+                           cv = 10,
+                           n_jobs = -1)
+
+grid_search.fit(X_train, y_train)
+
+best_accuracy = grid_search.best_score_
+best_parameters = grid_search.best_params_
+print("Best Accuracy: {:.2f} %".format(best_accuracy*100)) # prints the accuracy 94.31%
+print("Best Parameters: ", best_parameters) 
+
+
+#making a SVM model
+from sklearn.svm import SVC
+
+sv_classifier = SVC(kernel = 'linear')
+sv_classifier.fit(X_train, y_train)
+
+# make the prediction
+y_pred_SVM = sv_classifier.predict(X_test)
+
+print(np.concatenate((y_pred_SVM.reshape(len(y_pred_SVM),1), y_test.reshape(len(y_test),1)),1))
+print(y_pred_SVM)
+
+
+cm_SVM =confusion_matrix(y_test, y_pred_SVM)
+print(cm_SVM)
+
+print(classification_report(y_test, y_pred_SVM))
+accuracy_score(y_test, y_pred_SVM)
+
+
+
+# Creating a k-fold cross validation 10
+from sklearn.model_selection import cross_val_score
+
+accuracies = cross_val_score(estimator = sv_classifier, X= X_train, y= y_train, cv = 10)
+print("Accuracy: {:.2f} %".format(accuracies.mean()*100)) # prints the accuracy 93.29%
+print("Standard Deviation: {:.2f} %".format(accuracies.std()*100))# print the std 1.60%
+
+#improving the SVM model
+from sklearn.model_selection import GridSearchCV
+
+parameters_svm = [{'C': [0.25,0.5,0.75,1], 'kernel': ['linear']},
+              {'C': [0.25,0.5,0.75,1], 'kernel': ['rbf'], 'gamma': [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]}]
+grid_search = GridSearchCV(estimator = sv_classifier,
+                           param_grid= parameters_svm,
+                           scoring = 'accuracy',
+                           cv = 10,
+                           n_jobs = -1)
+
+grid_search.fit(X_train, y_train)
+
+best_accuracy = grid_search.best_score_
+best_parameters = grid_search.best_params_
+print("Best Accuracy: {:.2f} %".format(best_accuracy*100)) # prints the accuracy 94.31%
+print("Best Parameters: ", best_parameters) # best parameters C-0.25, kernel ; linear
+
+
+
+#K-NN model
+from sklearn.neighbors import KNeighborsClassifier
+
+clf_Knn = KNeighborsClassifier(n_neighbors= 5, metric= 'minkowski', p = 2)
+clf_Knn.fit(X_train, y_train)
+
+# make the prediction
+y_pred_Knn = clf_Knn.predict(X_test)
+
+print(np.concatenate((y_pred_Knn.reshape(len(y_pred_Knn),1), y_test.reshape(len(y_test),1)),1))
+print(y_pred_Knn)
+accuracy_score(y_test, y_pred_Knn)
+
+# make the classification report and confusion matrix
+cm_Knn =confusion_matrix(y_test, y_pred_Knn)
+
+print(cm_Knn)
+print(classification_report(y_test, y_pred_Knn))
+accuracy_score(y_test, y_pred_Knn)
+
+# improving the KNN model with k-fold cross validation
+from sklearn.model_selection import cross_val_score
+
+accuracies = cross_val_score(estimator = clf_Knn, X= X_train, y= y_train, cv = 10)
+print("Accuracy: {:.2f} %".format(accuracies.mean()*100)) # prints the accuracy 91.88%
+print("Standard Deviation: {:.2f} %".format(accuracies.std()*100)) #1.78% std
+
+
+#improving the KNN model with GridSearch to find the best parameters
+from sklearn.model_selection import GridSearchCV
+
+parameters_knn = [{'n_neighbors': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21], 'metric': ['euclidean'], 'weights':['uniform']},
+                  {'n_neighbors': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21], 'metric': ['euclidean'], 'weights':['distance']},
+                  {'n_neighbors': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21], 'metric': ['manhattan'], 'weights':['uniform']},
+                  {'n_neighbors': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21], 'metric': ['manhattan'], 'weights':['distance']},
+                  {'n_neighbors': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21], 'metric': ['minkowski'], 'weights':['uniform']},
+                  {'n_neighbors': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21], 'metric': ['minkowski'], 'weights':['distance']}]
+
+grid_search = GridSearchCV(estimator = clf_Knn,
+                           param_grid= parameters_knn,
+                           scoring = 'accuracy',
+                           cv = 10,
+                           n_jobs = -1)
+
+grid_search.fit(X_train, y_train)
+
+best_accuracy = grid_search.best_score_
+best_parameters = grid_search.best_params_
+print("Best Accuracy: {:.2f} %".format(best_accuracy*100)) # prints the accuracy 93.70%
+print("Best Parameters: ", best_parameters)# metric-manhattan, n_neighbors-1, weights-uniform
+
+from sklearn.ensemble import VotingClassifier
+clf_Knn_v = KNeighborsClassifier(n_neighbors= 1, metric= 'manhattan', p = 2, weights= 'uniform')
+clf_rfc_v =RandomForestClassifier(n_estimators=50, criterion= 'gini',min_samples_leaf= 1, min_samples_split = 2, random_state=42)
+clf_SVM_v = SVC(C = 0.25, kernel= 'linear', gamma="scale", probability = True, random_state=42)
+
+
+voting_clf = VotingClassifier(
+    estimators=[('knn',clf_Knn_v), ('rf', clf_rfc_v), ('svc', clf_SVM_v)],
+    voting='hard')
+
+voting_clf.fit(X_train, y_train)
+
+
+from sklearn.metrics import accuracy_score
+
+for clf in (clf_Knn_v, clf_rfc_v, clf_SVM_v, voting_clf):
+    clf.fit(X_train, y_train)
+    y_pred_v = clf.predict(X_test)
+    print(clf.__class__.__name__, accuracy_score(y_test, y_pred_v))
+    
+    
+##Graphics##
+
+# Barplot
+sns.barplot(data = dataset, palette = 'plasma', x = 'ALB', y = 'CHE')
+
+# Pie
+fig, ax = plt.subplots(figsize=(8,8))
+plt.pie(x=dataset["Sex"].value_counts(), 
+        colors=["red","yellow"], 
+        labels=["Male","Female"], 
+        shadow = True, 
+        autopct="%1.2f%%", 
+        explode = (0, 0.1)
+        )
+plt.show()
+
+
+# Histo
+fig, ax =plt.subplots(5,2, figsize=(20,25)) 
+plt.style.use("classic")
+
+
+sns.histplot(x = dataset["Age"], hue = dataset["Category"], palette="viridis", kde=True, ax=ax[0,0]);
+ax[0,0].set_xlabel("Age",fontsize=15)
+
+sns.histplot(x = dataset["ALB"], hue = dataset["Category"], palette="viridis", kde=True, ax=ax[0,1]);
+ax[0,1].set_xlabel("ALB",fontsize=15)
+
+
+sns.histplot(x = dataset["ALP"], hue = dataset["Category"], palette="dark", kde=True, ax=ax[1,0]);
+ax[1,0].set_xlabel("ALP",fontsize=15)
+
+sns.histplot(x = dataset["ALT"], hue = dataset["Category"], palette="dark", kde=True, ax=ax[1,1]);
+ax[1,1].set_xlabel("ALT",fontsize=15)
+
+
+sns.histplot(x = dataset["AST"], hue = dataset["Category"], palette="flare", kde=True, ax=ax[2,0]);
+ax[2,0].set_xlabel("AST",fontsize=15)
+
+sns.histplot(x = dataset["BIL"], hue = dataset["Category"], palette="flare", kde=True, ax=ax[2,1]);
+ax[2,1].set_xlabel("BIL",fontsize=15)
+
+
+sns.histplot(x = dataset["CHE"], hue = dataset["Category"], palette="viridis", kde=True, ax=ax[3,0]);
+ax[3,0].set_xlabel("CHE",fontsize=15)
+
+sns.histplot(x = dataset["CHOL"], hue = dataset["Category"], palette="viridis", kde=True, ax=ax[3,1]);
+ax[3,1].set_xlabel("CHOL",fontsize=15);
+
+
+sns.histplot(x = dataset["CREA"], hue = dataset["Category"], palette="dark", kde=True, ax=ax[4,0]);
+ax[4,0].set_xlabel("CREA",fontsize=15);
+
+sns.histplot(x = dataset["GGT"], hue = dataset["Category"], palette="dark", kde=True, ax=ax[4,1]);
+ax[4,1].set_xlabel("GGT",fontsize=15);
+
+plt.show()
+
+
+
+
+
