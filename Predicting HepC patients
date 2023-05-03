@@ -1,0 +1,173 @@
+#Importing the libraries
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from sklearn.metrics import classification_report
+
+
+# importing the data set
+
+dataset = pd.read_csv('HepatitisCdata.csv')
+
+# processing the data
+dataset.drop('Unnamed: 0', axis=1, inplace=True)
+
+dataset.replace(to_replace=('m','f'),
+             value=['0','1'], inplace=True)
+
+
+dataset.replace(to_replace=['0=Blood Donor','0s = suspect Blood Donor',
+                         '1 = Hepatitis', '2 = Fibrosis',
+                         '3 = Cirrhosis'],
+             value=['0','1','2','3','4'], inplace= True)
+
+X = dataset.iloc[:,1:].values
+y = dataset.iloc[:,0].values
+
+
+#Visualizting the data 
+import matplotlib.pyplot as plt
+from plotly.subplots import  make_subplots
+import seaborn as sns 
+%matplotlib notebook
+
+# Making a boxplot
+sns.boxplot(dataset['PROT'],dataset['Category'])
+
+#making a bar graph for sex
+plt.figure()
+c = ['red','blue','green','yellow','orange','darkcyan']
+dataset.Sex.value_counts().plot(kind ='bar', color = c)
+plt.xlabel('Sex (Male / Female)')
+plt.ylabel("Observartions")
+
+#making a pie chart for catergory
+plt.figure()
+dataset.Category.value_counts().plot(kind ='pie')
+
+#making a correlation matrix
+dataset.corr()
+corr_matrix = dataset.corr()
+plt.matshow(corr_matrix)
+plt.legend()
+plt.show()
+
+corr_matrix = dataset.corr()
+corr_matrix.style.background_gradient(cmap='coolwarm')
+
+# Seaborn pairplot compare pairplot and heatmap postive and negative correlations
+hepC_pairplot = dataset.dropna()
+sns.pairplot(hepC_pairplot, height = 1.25)
+
+
+# Remove any nan and replace them with the average
+from sklearn.impute import SimpleImputer
+imputer = SimpleImputer(missing_values= np.nan, strategy='mean')
+imputer.fit(X[:, 1:])
+X[:, 1:] = imputer.transform(X[:, 1:])
+
+
+# Splitting the dataset into training and testing
+
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+print(X_train)
+
+
+
+#Feature Scaling- to advoid information leakage from the test set
+from sklearn.preprocessing import StandardScaler
+sc = StandardScaler()
+X_train = sc.fit_transform(X_train)
+X_test = sc.transform(X_test)
+
+
+# training the logistic regression model on the training set
+from sklearn.linear_model import LogisticRegression
+classifier = LogisticRegression(random_state = 42)
+classifier.fit(X_train, y_train)
+
+# Train set for accuracy
+from sklearn.metrics import accuracy_score
+X_train_prediction= classifier.predict(X_train)
+training_data_accuracy=accuracy_score(X_train_prediction,y_train)
+print('Accuracy:', training_data_accuracy)
+
+# Prediciting the test set results
+y_pred_lr = classifier.predict(X_test)
+print(np.concatenate((y_pred.reshape(len(y_pred),1), y_test.reshape(len(y_test),1)),1))
+
+#Making the confusion Matrix
+from sklearn.metrics import confusion_matrix, accuracy_score
+cm = confusion_matrix(y_test, y_pred_lr)
+print(cm)
+accuracy_score(y_test, y_pred_lr)
+
+print(y_test.shape)
+print(y_train.shape)
+
+
+# Now we will look at Decision Tree model
+from sklearn.tree import DecisionTreeClassifier
+
+clf_dt = DecisionTreeClassifier(random_state=42)
+clf_dt = clf_dt.fit(X_train,y_train)
+y_pred_dt = clf_dt.predict(X_test)
+
+
+# Confusion matrix for DT
+cm_dt = confusion_matrix(y_test, y_pred_dt)
+
+print(metrics.classification_report(y_test, y_pred_dt))
+
+#Evaluating the model
+from sklearn import metrics
+print('Accuracy_dt:', metrics.accuracy_score(y_test, y_pred_dt))
+# we got an accuracy score of 0.8617886178861789
+
+
+#optimize the Tree
+
+clf_dto = DecisionTreeClassifier(criterion="entropy", max_depth=4.5)# changed the max_depth to 5 to increase our accuracy
+clf_dto = clf_dto.fit(X_train,y_train)
+y_pred = clf_dto.predict(X_test)
+
+print('Accuracy_dto:', metrics.accuracy_score(y_test, y_pred_dt))
+
+
+# Now we will look at Naive Bayes Gaussian model
+from sklearn.naive_bayes import GaussianNB
+clf_GNB = GaussianNB()
+clf_GNB.fit(X_train,y_train)
+y_pred_GNB = clf_GNB.predict(X_test)
+
+print('prediction value:', y_pred_GNB)
+
+from sklearn.metrics import confusion_matrix, accuracy_score
+cm_GNB = confusion_matrix(y_test, y_pred_GNB)
+print(cm)
+accuracy_score(y_test, y_pred_GNB)
+
+#Improving the GNB model
+from sklearn.model_selection import RepeatedStratifiedKFold,GridSearchCV
+from sklearn.preprocessing import PowerTransformer
+
+pt = PowerTransformer()
+params_NB = {'var_smoothing': np.logspace(0,-9, num=100)}
+gs_NB = GridSearchCV(estimator=clf_GNB, param_grid=params_NB, cv=cv_method, verbose=1, 
+                     scoring='accuracy')
+
+dataset_transformed = PowerTransformer().fit_transform(X_test)
+gs_NB.fit(dataset_transformed, y_test);
+
+gs_NB.best_params_
+gs_NB.best_score_
+
+#predict the target on the test dataset
+pred_test= gs_NB.predict(dataset_transformed)
+accuracy_test = accuracy_score(y_test, pred_test)
+print('accuracy score on test data: ', accuracy_test)
+
+from sklearn.metrics import classification_report
+print(classification_report(y_test, pred_test,))
+
